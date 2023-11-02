@@ -373,6 +373,45 @@ impl<Scalar: PrimeField> AllocatedNum<Scalar> {
         })
     }
 
+    /// Returns (self)*(other)^-1
+    pub fn div<CS>(&self, mut cs: CS, other: &Self) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<Scalar>,
+    {
+        let mut value = None;
+
+        let var = cs.alloc(
+            || "div num",
+            || {
+                let mut tmp = self.value.ok_or(SynthesisError::AssignmentMissing)?;
+                let other_inv = other
+                    .value
+                    .ok_or(SynthesisError::AssignmentMissing)?
+                    .invert();
+                assert!(other_inv.is_some().unwrap_u8() == 1);
+                let other_inv = other_inv.unwrap();
+                tmp.mul_assign(other_inv);
+
+                value = Some(tmp);
+
+                Ok(tmp)
+            },
+        )?;
+
+        // Constrain: var * other = self
+        cs.enforce(
+            || "division constraint",
+            |lc| lc + var,
+            |lc| lc + other.variable,
+            |lc| lc + self.variable,
+        );
+
+        Ok(AllocatedNum {
+            value,
+            variable: var,
+        })
+    }
+
     pub fn square<CS>(&self, mut cs: CS) -> Result<Self, SynthesisError>
     where
         CS: ConstraintSystem<Scalar>,
@@ -672,6 +711,21 @@ mod test {
         assert!(cs.get("product num") == Fr::from(120u64));
         assert!(n3.value.unwrap() == Fr::from(120u64));
         cs.set("product num", Fr::from(121u64));
+        assert!(!cs.is_satisfied());
+    }
+
+    #[test]
+    fn test_num_division() {
+        let mut cs = TestConstraintSystem::<Fr>::new();
+
+        let a = AllocatedNum::alloc(cs.namespace(|| "a"), || Ok(Fr::from(120u64))).unwrap();
+        let b = AllocatedNum::alloc(cs.namespace(|| "b"), || Ok(Fr::from(10u64))).unwrap();
+        let c = a.div(&mut cs, &b).unwrap();
+
+        assert!(cs.is_satisfied());
+        assert!(cs.get("div num") == Fr::from(12u64));
+        assert!(c.value.unwrap() == Fr::from(12u64));
+        cs.set("div num", Fr::from(11u64));
         assert!(!cs.is_satisfied());
     }
 
