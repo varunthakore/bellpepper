@@ -308,6 +308,39 @@ impl<Scalar: PrimeField> AllocatedNum<Scalar> {
         })
     }
 
+    /// Returns (self - other)
+    pub fn sub<CS>(&self, mut cs: CS, other: &Self) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<Scalar>,
+    {
+        let mut value = None;
+
+        let var = cs.alloc(
+            || "sub num",
+            || {
+                let mut tmp = self.value.ok_or(SynthesisError::AssignmentMissing)?;
+                tmp.sub_assign(other.value.ok_or(SynthesisError::AssignmentMissing)?);
+
+                value = Some(tmp);
+
+                Ok(tmp)
+            },
+        )?;
+
+        // Constrain: (a - b) * 1 = a - b
+        cs.enforce(
+            || "subtraction constraint",
+            |lc| lc + self.variable - other.variable,
+            |lc| lc + CS::one(),
+            |lc| lc + var,
+        );
+
+        Ok(AllocatedNum {
+            value,
+            variable: var,
+        })
+    }
+
     pub fn mul<CS>(&self, mut cs: CS, other: &Self) -> Result<Self, SynthesisError>
     where
         CS: ConstraintSystem<Scalar>,
@@ -589,6 +622,27 @@ mod test {
         assert!(cs.get("sum num") == Fr::ZERO);
         assert!(c.value.unwrap() == Fr::ZERO);
         cs.set("sum num", Fr::ONE);
+        assert!(!cs.is_satisfied());
+    }
+
+    #[test]
+    fn test_num_subraction() {
+        let mut cs = TestConstraintSystem::<Fr>::new();
+
+        let mut char = Fr::char();
+        char[0] -= 1u8;
+        let mod_minus_one = Fr::from_repr(char);
+        assert!(bool::from(mod_minus_one.is_some()));
+        let mod_minus_one = mod_minus_one.unwrap();
+
+        let a = AllocatedNum::alloc(cs.namespace(|| "a"), || Ok(Fr::ZERO)).unwrap();
+        let b = AllocatedNum::alloc(cs.namespace(|| "b"), || Ok(Fr::ONE)).unwrap();
+        let c = a.sub(&mut cs, &b).unwrap();
+
+        assert!(cs.is_satisfied());
+        assert!(cs.get("sub num") == mod_minus_one);
+        assert!(c.value.unwrap() == mod_minus_one);
+        cs.set("sub num", Fr::ONE);
         assert!(!cs.is_satisfied());
     }
 
