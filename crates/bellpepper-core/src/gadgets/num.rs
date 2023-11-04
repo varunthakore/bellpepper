@@ -474,6 +474,51 @@ impl<Scalar: PrimeField> AllocatedNum<Scalar> {
         Ok(())
     }
 
+    /// Returns the bit `self == 0`
+    pub fn is_zero<CS>(&self, mut cs: CS) -> Result<Boolean, SynthesisError>
+    where
+        CS: ConstraintSystem<Scalar>,
+    {
+        let out = AllocatedBit::alloc(&mut cs.namespace(|| "out bit"), {
+            let input_value = self.value.ok_or(SynthesisError::AssignmentMissing)?;
+            Some(input_value == Scalar::ZERO)
+        })?;
+        let multiplier = Self::alloc(&mut cs.namespace(|| "zero or inverse"), || {
+            let tmp = self.value.ok_or(SynthesisError::AssignmentMissing)?;
+
+            if tmp.is_zero().into() {
+                Ok(Scalar::ZERO)
+            } else {
+                Ok(tmp.invert().unwrap())
+            }
+        })?;
+
+        cs.enforce(
+            || "multiplier * input === 1 - out",
+            |lc| lc + multiplier.variable,
+            |lc| lc + self.variable,
+            |lc| lc + CS::one() - out.get_variable(),
+        );
+
+        cs.enforce(
+            || "out * input === 0",
+            |lc| lc + out.get_variable(),
+            |lc| lc + self.variable,
+            |lc| lc,
+        );
+        Ok(Boolean::from(out))
+    }
+
+    /// Takes two allocated numbers (self, other) and returns
+    /// the bit `self==other`
+    pub fn is_equal<CS>(&self, mut cs: CS, other: &Self) -> Result<Boolean, SynthesisError>
+    where
+        CS: ConstraintSystem<Scalar>,
+    {
+        let diff = self.sub(&mut cs.namespace(|| "self-other"), other)?;
+        Self::is_zero(&diff, cs)
+    }
+
     /// Takes two allocated numbers (a, b) and returns
     /// (b, a) if the condition is true, and (a, b)
     /// otherwise.
@@ -727,6 +772,69 @@ mod test {
         assert!(c.value.unwrap() == Fr::from(12u64));
         cs.set("div num", Fr::from(11u64));
         assert!(!cs.is_satisfied());
+    }
+
+    #[test]
+    fn test_num_is_zero() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x3d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+        {
+            let mut cs = TestConstraintSystem::<Fr>::new();
+            let a = AllocatedNum::alloc(cs.namespace(|| "a"), || Ok(Fr::random(&mut rng))).unwrap();
+            let is_zero = a.is_zero(&mut cs).unwrap();
+
+            assert!(cs.is_satisfied());
+            assert!(cs.get("out bit/boolean") == Fr::from(0u64));
+            assert!(!is_zero.get_value().unwrap());
+            cs.set("out bit/boolean", Fr::from(1u64));
+            assert!(!cs.is_satisfied());
+        }
+
+        {
+            let mut cs = TestConstraintSystem::<Fr>::new();
+            let a = AllocatedNum::alloc(cs.namespace(|| "a"), || Ok(Fr::ZERO)).unwrap();
+            let is_zero = a.is_zero(&mut cs).unwrap();
+            assert!(cs.is_satisfied());
+            assert!(cs.get("out bit/boolean") == Fr::from(1u64));
+            assert!(is_zero.get_value().unwrap());
+            cs.set("out bit/boolean", Fr::from(0u64));
+            assert!(!cs.is_satisfied());
+        }
+    }
+
+    #[test]
+    fn test_num_is_equal() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x3d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+        {
+            let mut cs = TestConstraintSystem::<Fr>::new();
+            let a = AllocatedNum::alloc(cs.namespace(|| "a"), || Ok(Fr::random(&mut rng))).unwrap();
+            let b = AllocatedNum::alloc(cs.namespace(|| "b"), || Ok(Fr::random(&mut rng))).unwrap();
+            let is_equal = a.is_equal(&mut cs, &b).unwrap();
+
+            assert!(cs.is_satisfied());
+            assert!(cs.get("out bit/boolean") == Fr::from(0u64));
+            assert!(!is_equal.get_value().unwrap());
+            cs.set("out bit/boolean", Fr::from(1u64));
+            assert!(!cs.is_satisfied());
+        }
+
+        {
+            let mut cs = TestConstraintSystem::<Fr>::new();
+            let a = AllocatedNum::alloc(cs.namespace(|| "a"), || Ok(Fr::random(&mut rng))).unwrap();
+            let b = a.clone();
+            let is_equal = a.is_equal(&mut cs, &b).unwrap();
+
+            assert!(cs.is_satisfied());
+            assert!(cs.get("out bit/boolean") == Fr::from(1u64));
+            assert!(is_equal.get_value().unwrap());
+            cs.set("out bit/boolean", Fr::from(0u64));
+            assert!(!cs.is_satisfied());
+        }
     }
 
     #[test]
