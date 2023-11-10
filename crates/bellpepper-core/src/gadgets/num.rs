@@ -520,6 +520,37 @@ impl<Scalar: PrimeField> AllocatedNum<Scalar> {
     }
 
     /// Takes two allocated numbers (a, b) and returns
+    /// a if condition is false, and b otherwise
+    pub fn conditionally_select<CS>(
+        mut cs: CS,
+        a: &Self,
+        b: &Self,
+        condition: &Boolean,
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<Scalar>,
+    {
+        let c = Self::alloc(&mut cs.namespace(|| "alloc output"), || {
+            if condition
+                .get_value()
+                .ok_or(SynthesisError::AssignmentMissing)?
+            {
+                Ok(b.value.ok_or(SynthesisError::AssignmentMissing)?)
+            } else {
+                Ok(a.value.ok_or(SynthesisError::AssignmentMissing)?)
+            }
+        })?;
+        cs.enforce(
+            || "condition * (a - b) === a - c",
+            |_| condition.lc(CS::one(), Scalar::ONE),
+            |lc| lc + a.variable - b.variable,
+            |lc| lc + a.variable - c.variable,
+        );
+
+        Ok(c)
+    }
+
+    /// Takes two allocated numbers (a, b) and returns
     /// (b, a) if the condition is true, and (a, b)
     /// otherwise.
     pub fn conditionally_reverse<CS>(
@@ -834,6 +865,37 @@ mod test {
             assert!(is_equal.get_value().unwrap());
             cs.set("out bit/boolean", Fr::from(0u64));
             assert!(!cs.is_satisfied());
+        }
+    }
+
+    #[test]
+    fn test_num_conditional_select() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x3d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+        {
+            let mut cs = TestConstraintSystem::<Fr>::new();
+
+            let a = AllocatedNum::alloc(cs.namespace(|| "a"), || Ok(Fr::random(&mut rng))).unwrap();
+            let b = AllocatedNum::alloc(cs.namespace(|| "b"), || Ok(Fr::random(&mut rng))).unwrap();
+            let condition = Boolean::constant(false);
+            let c = AllocatedNum::conditionally_select(&mut cs, &a, &b, &condition).unwrap();
+
+            assert!(cs.is_satisfied());
+            assert_eq!(a.value.unwrap(), c.value.unwrap());
+        }
+
+        {
+            let mut cs = TestConstraintSystem::<Fr>::new();
+
+            let a = AllocatedNum::alloc(cs.namespace(|| "a"), || Ok(Fr::random(&mut rng))).unwrap();
+            let b = AllocatedNum::alloc(cs.namespace(|| "b"), || Ok(Fr::random(&mut rng))).unwrap();
+            let condition = Boolean::constant(true);
+            let c = AllocatedNum::conditionally_select(&mut cs, &a, &b, &condition).unwrap();
+
+            assert!(cs.is_satisfied());
+            assert_eq!(b.value.unwrap(), c.value.unwrap());
         }
     }
 
