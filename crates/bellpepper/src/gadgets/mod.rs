@@ -1,6 +1,8 @@
 //! Self-contained sub-circuit implementations for various primitives.
 pub mod blake2s;
 pub use bellpepper_core::boolean;
+#[macro_use]
+pub mod boolean_utils;
 pub mod lookup;
 pub mod multieq;
 pub mod multipack;
