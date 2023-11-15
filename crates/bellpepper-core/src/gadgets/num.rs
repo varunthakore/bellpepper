@@ -341,6 +341,38 @@ impl<Scalar: PrimeField> AllocatedNum<Scalar> {
         })
     }
 
+    /// Returns (-self)
+    pub fn neg<CS>(&self, mut cs: CS) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<Scalar>,
+    {
+        let mut value = None;
+
+        let var = cs.alloc(
+            || "neg num",
+            || {
+                let tmp = self.value.ok_or(SynthesisError::AssignmentMissing)?.neg();
+
+                value = Some(tmp);
+
+                Ok(tmp)
+            },
+        )?;
+
+        // Constrain: (self + var) = 0
+        cs.enforce(
+            || "negation constraint",
+            |lc| lc,
+            |lc| lc,
+            |lc| lc + self.variable + var,
+        );
+
+        Ok(AllocatedNum {
+            value,
+            variable: var,
+        })
+    }
+
     pub fn mul<CS>(&self, mut cs: CS, other: &Self) -> Result<Self, SynthesisError>
     where
         CS: ConstraintSystem<Scalar>,
@@ -690,7 +722,7 @@ impl<Scalar: PrimeField> Num<Scalar> {
 
 #[cfg(test)]
 mod test {
-    use std::ops::{AddAssign, MulAssign, SubAssign};
+    use std::ops::{AddAssign, MulAssign, Neg, SubAssign};
 
     use crate::ConstraintSystem;
     use blstrs::Scalar as Fr;
@@ -758,6 +790,25 @@ mod test {
         assert!(cs.get("sub num") == mod_minus_one);
         assert!(c.value.unwrap() == mod_minus_one);
         cs.set("sub num", Fr::ONE);
+        assert!(!cs.is_satisfied());
+    }
+
+    #[test]
+    fn test_num_negation() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x3d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+        let mut cs = TestConstraintSystem::<Fr>::new();
+
+        let a = AllocatedNum::alloc(cs.namespace(|| "a"), || Ok(Fr::random(&mut rng))).unwrap();
+        let out = a.neg(&mut cs).unwrap();
+        let out_exp = a.get_value().unwrap().neg();
+
+        assert!(cs.is_satisfied());
+        assert!(cs.get("neg num") == out_exp);
+        assert!(out.value.unwrap() == out_exp);
+        cs.set("neg num", Fr::random(&mut rng));
         assert!(!cs.is_satisfied());
     }
 
