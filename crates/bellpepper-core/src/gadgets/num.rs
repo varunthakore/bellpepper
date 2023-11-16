@@ -652,7 +652,7 @@ impl<Scalar: PrimeField> AllocatedNum<Scalar> {
             let left =
                 Self::mux_tree(&mut cs.namespace(|| "left"), select_bits.clone(), left_half)?;
             let right = Self::mux_tree(&mut cs.namespace(|| "right"), select_bits, right_half)?;
-            Self::conditionally_select(&mut cs.namespace(|| "join"), &right, &left, bit)
+            Self::conditionally_select(&mut cs.namespace(|| "join"), &left, &right, bit)
         } else {
             if inputs.len() != 1 {
                 return Err(SynthesisError::Unsatisfiable);
@@ -1041,7 +1041,7 @@ mod test {
             let res = AllocatedNum::<Fr>::mux_tree(
                 &mut cs.namespace(|| format!("mux tree result for conditions = {c1}, {c0}")),
                 select.iter(),
-                &[a3.clone(), a2.clone(), a1.clone(), a0.clone()],
+                &[a0.clone(), a1.clone(), a2.clone(), a3.clone()],
             );
             assert!(res.is_ok());
             let res = res.unwrap();
