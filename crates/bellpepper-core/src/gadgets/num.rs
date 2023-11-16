@@ -633,6 +633,34 @@ impl<Scalar: PrimeField> AllocatedNum<Scalar> {
         Ok((c, d))
     }
 
+    /// Builds a mux tree. The first bit is taken as the highest order.
+    // Code Adapted from https://github.com/alex-ozdemir/bellman-bignat/blob/0e10f9f7ef4a061deaf4d7684d398dca613174c8/src/util/gadget.rs#L124
+    fn mux_tree<'a, CS>(
+        cs: &mut CS,
+        mut select_bits: impl Iterator<Item = &'a Boolean> + Clone,
+        inputs: &[Self],
+    ) -> Result<Self, SynthesisError>
+    where
+        CS: ConstraintSystem<Scalar>,
+    {
+        if let Some(bit) = select_bits.next() {
+            if inputs.len() & 1 != 0 {
+                return Err(SynthesisError::Unsatisfiable);
+            }
+            let left_half = &inputs[..(inputs.len() / 2)];
+            let right_half = &inputs[(inputs.len() / 2)..];
+            let left =
+                Self::mux_tree(&mut cs.namespace(|| "left"), select_bits.clone(), left_half)?;
+            let right = Self::mux_tree(&mut cs.namespace(|| "right"), select_bits, right_half)?;
+            Self::conditionally_select(&mut cs.namespace(|| "join"), &right, &left, bit)
+        } else {
+            if inputs.len() != 1 {
+                return Err(SynthesisError::Unsatisfiable);
+            }
+            Ok(inputs[0].clone())
+        }
+    }
+
     pub fn get_value(&self) -> Option<Scalar> {
         self.value
     }
@@ -982,6 +1010,57 @@ mod test {
 
             assert_eq!(a.value.unwrap(), d.value.unwrap());
             assert_eq!(b.value.unwrap(), c.value.unwrap());
+        }
+    }
+
+    #[test]
+    fn test_mux_tree() {
+        let mut rng = XorShiftRng::from_seed([
+            0x59, 0x62, 0xbe, 0x3d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54, 0x06,
+            0xbc, 0xe5,
+        ]);
+
+        let conditions = vec![(false, false), (false, true), (true, false), (true, true)];
+
+        for (c1, c0) in conditions {
+            let mut cs = TestConstraintSystem::<Fr>::new();
+
+            let condition0 = Boolean::constant(c0);
+            let condition1 = Boolean::constant(c1);
+            let select = &[condition1, condition0];
+
+            let a0 = AllocatedNum::alloc(cs.namespace(|| "alloc a0"), || Ok(Fr::random(&mut rng)))
+                .unwrap();
+            let a1 = AllocatedNum::alloc(cs.namespace(|| "alloc a1"), || Ok(Fr::random(&mut rng)))
+                .unwrap();
+            let a2 = AllocatedNum::alloc(cs.namespace(|| "alloc a2"), || Ok(Fr::random(&mut rng)))
+                .unwrap();
+            let a3 = AllocatedNum::alloc(cs.namespace(|| "alloc a3"), || Ok(Fr::random(&mut rng)))
+                .unwrap();
+
+            let res = AllocatedNum::<Fr>::mux_tree(
+                &mut cs.namespace(|| format!("mux tree result for conditions = {c1}, {c0}")),
+                select.iter(),
+                &[a3.clone(), a2.clone(), a1.clone(), a0.clone()],
+            );
+            assert!(res.is_ok());
+            let res = res.unwrap();
+
+            let res_expected = match (c1, c0) {
+                (false, false) => a0.clone(),
+                (false, true) => a1.clone(),
+                (true, false) => a2.clone(),
+                (true, true) => a3.clone(),
+            };
+            cs.enforce(
+                || format!("res equality for conditions = {c1}, {c0}"),
+                |lc| lc,
+                |lc| lc,
+                |lc| lc + res_expected.get_variable() - res.get_variable(),
+            );
+
+            assert!(cs.is_satisfied());
+            assert_eq!(cs.num_constraints(), 4);
         }
     }
 
