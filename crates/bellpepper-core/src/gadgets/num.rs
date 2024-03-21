@@ -7,7 +7,7 @@ use crate::{ConstraintSystem, LinearCombination, SynthesisError, Variable};
 
 use crate::gadgets::boolean::{self, AllocatedBit, Boolean};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Copy, Serialize, Deserialize)]
 pub struct AllocatedNum<Scalar: PrimeField> {
     value: Option<Scalar>,
     variable: Variable,
