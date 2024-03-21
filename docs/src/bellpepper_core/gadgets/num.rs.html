@@ -1228,7 +1228,7 @@
 
 <span class="kw">use </span><span class="kw">crate</span>::gadgets::boolean::{<span class="self">self</span>, AllocatedBit, Boolean};
 
-<span class="attr">#[derive(Debug, Serialize, Deserialize)]
+<span class="attr">#[derive(Debug, Copy, Serialize, Deserialize)]
 </span><span class="kw">pub struct </span>AllocatedNum&lt;Scalar: PrimeField&gt; {
     value: <span class="prelude-ty">Option</span>&lt;Scalar&gt;,
     variable: Variable,
