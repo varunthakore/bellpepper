@@ -6,7 +6,7 @@ use crate::{ConstraintSystem, LinearCombination, SynthesisError, Variable};
 
 /// Represents a variable in the constraint system which is guaranteed
 /// to be either zero or one.
-#[derive(Debug, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct AllocatedBit {
     variable: Variable,
     value: Option<bool>,
@@ -365,7 +365,7 @@ where
 
 /// This is a boolean value which may be either a constant or
 /// an interpretation of an `AllocatedBit`.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum Boolean {
     /// Existential view of the boolean variable
     Is(AllocatedBit),
