@@ -635,7 +635,7 @@ impl<Scalar: PrimeField> AllocatedNum<Scalar> {
 
     /// Builds a mux tree. The first bit is taken as the highest order.
     // Code Adapted from https://github.com/alex-ozdemir/bellman-bignat/blob/0e10f9f7ef4a061deaf4d7684d398dca613174c8/src/util/gadget.rs#L124
-    fn mux_tree<'a, CS>(
+    pub fn mux_tree<'a, CS>(
         cs: &mut CS,
         mut select_bits: impl Iterator<Item = &'a Boolean> + Clone,
         inputs: &[Self],
