@@ -15,10 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
-        with:
-            profile: minimal
-
+      - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-release
         uses: taiki-e/install-action@v2
         with:
