@@ -2079,7 +2079,7 @@
 
 <span class="doccomment">/// Represents a variable in the constraint system which is guaranteed
 /// to be either zero or one.
-</span><span class="attr">#[derive(Debug, Clone)]
+</span><span class="attr">#[derive(Copy, Clone, Debug)]
 </span><span class="kw">pub struct </span>AllocatedBit {
     variable: Variable,
     value: <span class="prelude-ty">Option</span>&lt;bool&gt;,
@@ -2438,7 +2438,7 @@
 
 <span class="doccomment">/// This is a boolean value which may be either a constant or
 /// an interpretation of an `AllocatedBit`.
-</span><span class="attr">#[derive(Clone, Debug)]
+</span><span class="attr">#[derive(Copy, Clone, Debug)]
 </span><span class="kw">pub enum </span>Boolean {
     <span class="doccomment">/// Existential view of the boolean variable
     </span>Is(AllocatedBit),
