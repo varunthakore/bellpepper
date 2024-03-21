@@ -1856,7 +1856,7 @@
 
     <span class="doccomment">/// Builds a mux tree. The first bit is taken as the highest order.
     </span><span class="comment">// Code Adapted from https://github.com/alex-ozdemir/bellman-bignat/blob/0e10f9f7ef4a061deaf4d7684d398dca613174c8/src/util/gadget.rs#L124
-    </span><span class="kw">fn </span>mux_tree&lt;<span class="lifetime">'a</span>, CS&gt;(
+    </span><span class="kw">pub fn </span>mux_tree&lt;<span class="lifetime">'a</span>, CS&gt;(
         cs: <span class="kw-2">&amp;mut </span>CS,
         <span class="kw-2">mut </span>select_bits: <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Boolean&gt; + Clone,
         inputs: <span class="kw-2">&amp;</span>[<span class="self">Self</span>],
